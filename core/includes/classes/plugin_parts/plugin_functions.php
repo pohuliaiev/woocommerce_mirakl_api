@@ -28,8 +28,9 @@ function mirakl_api(){
 
     $apiUrl = get_option( 'mirakl_plugin_settings' )['mirakl_site_url'];
     $apiKey = get_option( 'mirakl_plugin_settings' )['mirakl_api_key'];
+    $shopId = get_option( 'mirakl_plugin_settings' )['mirakl_shop_id'];
 
-    $apiClient = new Mirakl\MMP\Shop\Client\ShopApiClient($apiUrl, $apiKey, '2913');
+    $apiClient = new Mirakl\MMP\Shop\Client\ShopApiClient($apiUrl, $apiKey, $shopId);
     $arr = [];
 
     $startDate = '';
@@ -41,6 +42,7 @@ function mirakl_api(){
     $endDate = date('Y-m-d-H:i');
 
     $GetOR = new Mirakl\MMP\Shop\Request\Order\Get\GetOrdersRequest(); //initiate request
+    $GetOR->setOrderStates(['CLOSED','RECEIVED','SHIPPED','SHIPPING']);
     //$GetOR->setOrderStates(['CLOSED','RECEIVED','SHIPPED','SHIPPING']);
     $GetOR->setStartDate( $startDate);
     $GetOR->setEndDate($endDate);
