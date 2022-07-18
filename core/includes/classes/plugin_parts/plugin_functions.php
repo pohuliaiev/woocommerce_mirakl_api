@@ -25,10 +25,11 @@ function woocommerce_mirakl_products(){
 
 
 function mirakl_api(){
+
     $apiUrl = get_option( 'mirakl_plugin_settings' )['mirakl_site_url'];
     $apiKey = get_option( 'mirakl_plugin_settings' )['mirakl_api_key'];
 
-    $apiClient = new Mirakl\MMP\Shop\Client\ShopApiClient($apiUrl, $apiKey, '2092');
+    $apiClient = new Mirakl\MMP\Shop\Client\ShopApiClient($apiUrl, $apiKey, '2913');
     $arr = [];
 
     $startDate = '';
@@ -40,7 +41,7 @@ function mirakl_api(){
     $endDate = date('Y-m-d-H:i');
 
     $GetOR = new Mirakl\MMP\Shop\Request\Order\Get\GetOrdersRequest(); //initiate request
-    $GetOR->setOrderStates(['CLOSED','RECEIVED','SHIPPED','SHIPPING']);
+    //$GetOR->setOrderStates(['CLOSED','RECEIVED','SHIPPED','SHIPPING']);
     $GetOR->setStartDate( $startDate);
     $GetOR->setEndDate($endDate);
     $GetOR->setMax(100);
@@ -85,33 +86,30 @@ function mirakl_api(){
             $adress2_shipping = $item['customer']['shipping_address']['street_2'];
             $zip_shipping = $item['customer']['shipping_address']['zip_code'];
 
+            /*
             foreach ($item['order_lines'] as $order){
                 $arr[$x]['product']['sku'] = $order['offer']['product']['sku'];//product should be an array
                 $arr[$x]['product']['quantity'] = $order['quantity'];
+            }
+            */
+        }
+
+        $y = -1;
+        foreach($MiraklColl as $item){
+            $n = -1;
+            $y += 1;
+            foreach($item->getOrderLines() as $order){
+                $n += 1;
+                $arr[$y]['products'][$n]['sku'] = $order->getOffer()->getProduct()->getSku();
+                $arr[$y]['products'][$n]['quantity'] = $order->getQuantity();
+                $price = $order->getOffer()->getPrice();
+                $priceComma = str_replace('.', ',', $price);
+                $arr[$y]['products'][$n]['price'] = $priceComma;
             }
         }
     }
     else echo "No orders returned";
     return $arr;
-}
-
-
-function create_mirakl_order($adress,$product_id ='',$quantity='',$date =''){
-    global $woocommerce;
-
-
-
-    // Now we create the order
-    $order = wc_create_order();
-
-    // The add_product() function below is located in /plugins/woocommerce/includes/abstracts/abstract_wc_order.php
-    $order->add_product( wc_get_product( $product_id ), $quantity ); // This is an existing SIMPLE product
-    $order->set_address( $adress, 'billing' );
-    $order->set_date_created( $date );
-    //
-    $order->calculate_totals();
-    $order->update_status('completed', 'Order imported from shop-apotheke.com', TRUE);
-    update_post_meta($order->get_id(), 'order_source', 'shop-apotheke.com');
 }
 
 function synchonize_mirakl_orders(){
@@ -121,25 +119,36 @@ function synchonize_mirakl_orders(){
 
     foreach($mirakl_products_array as $mirakl){
         $x += 1;
+        $order = wc_create_order();
+        $adress = [];
+        $adress['first_name'] = $mirakl['firstname'];
+        $adress['last_name']  = $mirakl['lastname'];
+        $adress['email']      = $mirakl['email'];
+        $adress['address_1']  = $mirakl['adress'];
+        $adress['address_2']  = $mirakl['adress2'];
+        $adress['city']       = $mirakl['city'];
+        $adress['postcode']   = $mirakl['zip'];
+        $adress['country']    = $mirakl['country_code'];
+        $order->set_address( $adress, 'billing' );
+        $order->set_date_created( $date );
+        $date = $mirakl['date'];
+        $mirakl_cart = $mirakl['products'];
+        foreach ($mirakl_cart as $inner_product){
 
-        foreach($mirakl_products as $item){
-            global $product;
-            if(get_post_meta($item->get_id(), '_mirakl_sku', true) == $mirakl['product']['sku']){
-                $quantity = $mirakl_products_array[$x]['product']['quantity'];
-                $date = $mirakl_products_array[$x]['date'];
-                $adress = [];
-                $adress['first_name'] = $mirakl_products_array[$x]['firstname'];
-                $adress['last_name']  = $mirakl_products_array[$x]['lastname'];
-                $adress['email']      = $mirakl_products_array[$x]['email'];
-                $adress['address_1']  = $mirakl_products_array[$x]['adress'];
-                $adress['address_2']  = $mirakl_products_array[$x]['adress2'];
-                $adress['city']       = $mirakl_products_array[$x]['city'];
-                $adress['postcode']   = $mirakl_products_array[$x]['zip'];
-                $adress['country']    = $mirakl_products_array[$x]['country_code'];
-                create_mirakl_order($adress, $item->get_id(), $quantity, $date);
-                update_option( 'mirakl_last_updated', date('Y-m-d-H:i') );
+            foreach($mirakl_products as $item){
+                global $product;
+                if(get_post_meta($item->get_id(), '_mirakl_sku', true) == $inner_product['sku']){
+                    $quantity = $inner_product['quantity'];
+                    $price = $inner_product['price'];
+                    $mirakl_product = wc_get_product( $item->get_id() );
+                    $mirakl_product->set_price( $price );
+                    $order->add_product( $mirakl_product, $quantity );
+                }
             }
-        }
 
+        }
+        $order->calculate_totals();
+        $order->update_status('completed', 'Order imported from shop-apotheke.com', TRUE);
+        update_option( 'mirakl_last_updated', date('Y-m-d-H:i') );
     }
 }
